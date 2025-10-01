@@ -1,0 +1,121 @@
+﻿@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Kullanıcılar";
+}
+
+<h2>Kullanıcılar</h2>
+
+<button class="btn btn-primary mb-2" id="btnNewUser">Yeni Kullanıcı</button>
+
+<table class="table">
+    <thead class="table-dark">
+        <tr><th>ID</th><th>Ad</th><th>Email</th><th>İşlem</th></tr>
+    </thead>
+    <tbody id="usersTbody"></tbody>
+</table>
+
+<!-- Modal user -->
+<div class="modal fade" id="userModal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Yeni Kullanıcı</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input id="userName" class="form-control mb-2" placeholder="Ad" />
+                <input id="userEmail" class="form-control mb-2" placeholder="Email" />
+                <input id="userId" type="hidden" />
+            </div>
+            <div class="modal-footer">
+                <button id="saveUserBtn" class="btn btn-primary">Kaydet</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const apiUsers = "/api/users"; // RESTful route
+
+        $(function(){
+            loadUsers();
+
+            // Yeni kullanıcı modal
+            $("#btnNewUser").click(function(){
+                $("#userName").val("");
+                $("#userEmail").val("");
+                $("#userId").val("");
+                new bootstrap.Modal(document.getElementById('userModal')).show();
+            });
+
+            // Kaydet / Güncelle
+            $("#saveUserBtn").click(function(){
+                const id = $("#userId").val();
+                const payload = {
+                    userName: $("#userName").val(),
+                    email: $("#userEmail").val()
+                };
+
+                if (!payload.userName || !payload.email) { alert("Ad ve Email gerekli."); return; }
+
+                if (!id) {
+                    // Create
+                    $.ajax({
+                        url: apiUsers, // POST /api/users
+                        type: "POST",
+                        contentType: "application/json",
+                        data: JSON.stringify(payload),
+                        success: function(){ loadUsers(); bootstrap.Modal.getInstance($('#userModal')).hide(); }
+                    });
+                } else {
+                    // Update
+                    $.ajax({
+                        url: apiUsers + "/" + id, // PUT /api/users/{id}
+                        type: "PUT",
+                        contentType: "application/json",
+                        data: JSON.stringify(payload),
+                        success: function(){ loadUsers(); bootstrap.Modal.getInstance($('#userModal')).hide(); }
+                    });
+                }
+            });
+        });
+
+        // Kullanıcıları listele
+        function loadUsers(){
+            $.get(apiUsers, function(data){ // GET /api/users
+                let rows = "";
+                data.forEach(u => {
+                    rows += `<tr>
+                        <td>${u.id}</td>
+                        <td>${u.userName}</td>
+                        <td>${u.email}</td>
+                        <td>
+                            <button class="btn btn-sm btn-warning" onclick="editUser(${u.id}, '${u.userName}', '${u.email}')">Düzenle</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id})">Sil</button>
+                        </td>
+                    </tr>`;
+                });
+                $("#usersTbody").html(rows);
+            });
+        }
+
+        // Düzenle modal
+        function editUser(id, name, email){
+            $("#userId").val(id);
+            $("#userName").val(name);
+            $("#userEmail").val(email);
+            new bootstrap.Modal(document.getElementById('userModal')).show();
+        }
+
+        // Sil
+        function deleteUser(id){
+            if(!confirm("Kullanıcı silinsin mi?")) return;
+            $.ajax({
+                url: apiUsers + "/" + id, // DELETE /api/users/{id}
+                type: "DELETE",
+                success: function(){ loadUsers(); }
+            });
+        }
+    </script>
+}

@@ -1,0 +1,200 @@
+﻿@{
+    ViewData["Title"] = "Görevler";
+    Layout = "_Layout";
+}
+
+<h2>Görev Yönetimi</h2>
+
+<div class="mb-3">
+    <button class="btn btn-primary" id="btnNewTask">Yeni Görev</button>
+
+    <select id="priorityFilter" class="form-select d-inline-block w-auto ms-2">
+        <option value="">Tümü</option>
+        <option value="0">Düşük</option>
+        <option value="1">Orta</option>
+        <option value="2">Yüksek</option>
+    </select>
+</div>
+
+<table class="table table-striped" id="tasksTable">
+    <thead class="table-dark">
+        <tr>
+            <th>ID</th>
+            <th>Başlık</th>
+            <th>Açıklama</th>
+            <th>Kullanıcı</th>
+            <th>Öncelik</th>
+            <th>Durum</th>
+            <th>İşlem</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<!-- Modal: Yeni / Düzenle -->
+<div class="modal fade" id="taskModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="taskModalTitle">Yeni Görev</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input id="taskId" type="hidden" />
+                <div class="mb-2"><input id="taskTitle" class="form-control" placeholder="Başlık" /></div>
+                <div class="mb-2"><textarea id="taskDesc" class="form-control" placeholder="Açıklama"></textarea></div>
+                <div class="mb-2">
+                    <select id="taskUserId" class="form-select"></select>
+                </div>
+                <div class="mb-2">
+                    <select id="taskPriority" class="form-select">
+                        <option value="0">Düşük</option>
+                        <option value="1">Orta</option>
+                        <option value="2">Yüksek</option>
+                    </select>
+                </div>
+                <div class="form-check">
+                    <input id="taskIsCompleted" class="form-check-input" type="checkbox" />
+                    <label class="form-check-label">Tamamlandı</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="saveTaskBtn" class="btn btn-primary">Kaydet</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+const apiTasks = "/api/tasks";   // RESTful route'lar
+const apiUsers = "/api/users";
+
+$(function(){
+    loadUsersIntoSelect();
+    loadTasks();
+
+    $("#btnNewTask").click(function(){
+        $("#taskModalTitle").text("Yeni Görev");
+        $("#taskId").val("");
+        $("#taskTitle").val("");
+        $("#taskDesc").val("");
+        $("#taskUserId").val("");
+        $("#taskPriority").val("0");
+        $("#taskIsCompleted").prop("checked", false);
+        var modal = new bootstrap.Modal(document.getElementById('taskModal'));
+        modal.show();
+    });
+
+    $("#saveTaskBtn").click(function(){
+        const id = $("#taskId").val();
+        const payload = {
+            title: $("#taskTitle").val(),
+            description: $("#taskDesc").val(),
+            userId: $("#taskUserId").val() ? parseInt($("#taskUserId").val()) : null,
+            priority: parseInt($("#taskPriority").val()),
+            isCompleted: $("#taskIsCompleted").is(":checked")
+        };
+
+        if (!payload.title || !payload.description) { alert("Başlık ve açıklama gerekli."); return; }
+
+        if (!id) {
+            // Create
+            $.ajax({
+                url: apiTasks,   // POST /api/tasks
+                type: "POST",
+                contentType: "application/json",
+                data: JSON.stringify(payload),
+                success: function(){ 
+                    loadTasks(); 
+                    bootstrap.Modal.getInstance($('#taskModal')).hide(); 
+                }
+            });
+        } else {
+            // Update
+            $.ajax({
+                url: apiTasks + "/" + id, // PUT /api/tasks/{id}
+                type: "PUT",
+                contentType: "application/json",
+                data: JSON.stringify(payload),
+                success: function(){ 
+                    loadTasks(); 
+                    bootstrap.Modal.getInstance($('#taskModal')).hide(); 
+                }
+            });
+        }
+    });
+
+    $("#priorityFilter").change(function(){ loadTasks(); });
+});
+
+function loadUsersIntoSelect(){
+    $.get(apiUsers, function(users){
+        let opts = '<option value="">Atama yok</option>';
+        users.forEach(u => opts += `<option value="${u.id}">${u.userName}</option>`);
+        $("#taskUserId").html(opts);
+    });
+}
+
+function loadTasks(){
+    $.get(apiTasks, function(data){
+        const filter = $("#priorityFilter").val();
+        let rows = "";
+        data.forEach(t => {
+            if (filter !== "" && String(t.priority) !== String(filter)) return;
+            rows += `<tr>
+                <td>${t.id}</td>
+                <td><a href="#" onclick="showDetail(${t.id});return false;">${t.title}</a></td>
+                <td>${t.description}</td>
+                <td>${t.userName ?? "-"}</td>
+                <td>${["Düşük","Orta","Yüksek"][t.priority]}</td>
+                <td>${t.isCompleted ? "✅" : "❌"}</td>
+                <td>
+                    ${!t.isCompleted ? `<button class="btn btn-sm btn-success" onclick="completeTask(${t.id})">Tamamla</button>` : ""}
+                    <button class="btn btn-sm btn-warning" onclick="editTask(${t.id})">Düzenle</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteTask(${t.id})">Sil</button>
+                </td>
+            </tr>`;
+        });
+        $("#tasksTable tbody").html(rows);
+    });
+}
+
+function showDetail(id){
+    $.get(apiTasks + "/" + id, function(t){
+        alert(`Başlık: ${t.title}\nAçıklama: ${t.description}\nKullanıcı: ${t.userName ?? '-'}\nÖncelik: ${["Düşük","Orta","Yüksek"][t.priority]}\nDurum: ${t.isCompleted ? 'Tamamlandı':'Bekliyor'}`);
+    });
+}
+
+function editTask(id){
+    $.get(apiTasks + "/" + id, function(t){
+        $("#taskModalTitle").text("Görev Düzenle");
+        $("#taskId").val(t.id);
+        $("#taskTitle").val(t.title);
+        $("#taskDesc").val(t.description);
+        $("#taskUserId").val(t.userId);
+        $("#taskPriority").val(t.priority);
+        $("#taskIsCompleted").prop("checked", t.isCompleted);
+        var modal = new bootstrap.Modal(document.getElementById('taskModal'));
+        modal.show();
+    });
+}
+
+function deleteTask(id){
+    if (!confirm("Silmek istediğine emin misin?")) return;
+    $.ajax({
+        url: apiTasks + "/" + id, // DELETE /api/tasks/{id}
+        type: "DELETE",
+        success: function(){ loadTasks(); }
+    });
+}
+
+function completeTask(id){
+    $.ajax({
+        url: apiTasks + "/" + id + "/complete", // PATCH /api/tasks/{id}/complete
+        type: "PATCH",
+        success: function(){ loadTasks(); }
+    });
+}
+</script>
+}
